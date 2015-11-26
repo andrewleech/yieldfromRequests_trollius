@@ -9,13 +9,14 @@ import os
 import pickle
 import unittest
 import collections
-import asyncio
+import trollius as asyncio
+from trollius import From, Return
 import functools
 import io
 import pytest
 import sys
 
-sys.path.insert(0, '.\yieldfrom')
+sys.path.insert(0, os.path.join(os.path.dirname(__file__),'yieldfrom_t'))
 import requests
 from requests.adapters import HTTPAdapter
 from requests.auth import HTTPDigestAuth, _basic_auth_str
@@ -93,20 +94,20 @@ class RequestsTestCase(unittest.TestCase):
         requests.head
         requests.put
         requests.patch
-        yield from requests.post
+        yield From(requests.post)
 
     @async_test
     def test_invalid_url(self):
         with pytest.raises(MissingSchema):
-            yield from requests.get('hiwpefhipowhefopw')
+            yield From(requests.get('hiwpefhipowhefopw'))
         with pytest.raises(InvalidSchema):
-            yield from requests.get('localhost:3128')
+            yield From(requests.get('localhost:3128'))
         with pytest.raises(InvalidSchema):
-            yield from requests.get('localhost.localdomain:3128/')
+            yield From(requests.get('localhost.localdomain:3128/'))
         with pytest.raises(InvalidSchema):
-            yield from requests.get('10.122.1.1:3128/')
+            yield From(requests.get('10.122.1.1:3128/'))
         with pytest.raises(InvalidURL):
-            yield from requests.get('http://')
+            yield From(requests.get('http://'))
 
     @async_test
     def test_basic_building(self):
@@ -150,7 +151,7 @@ class RequestsTestCase(unittest.TestCase):
         for scheme in schemes:
             url = scheme + parts.netloc + parts.path
             r = requests.Request('GET', url)
-            r = yield from s.send(r.prepare())
+            r = yield From(s.send(r.prepare()))
             assert r.status_code == 200, 'failed for scheme {0}'.format(scheme)
 
     @async_test
@@ -159,29 +160,29 @@ class RequestsTestCase(unittest.TestCase):
         s = requests.Session()
         s.proxies = getproxies()
 
-        r = yield from s.send(r.prepare())
+        r = yield From(s.send(r.prepare()))
 
         assert r.status_code == 200
 
     @async_test
     def test_HTTP_302_ALLOW_REDIRECT_GET(self):
-        r = yield from requests.get(httpbin('redirect', '1'))
+        r = yield From(requests.get(httpbin('redirect', '1')))
         assert r.status_code == 200
         assert r.history[0].status_code == 302
         assert r.history[0].is_redirect
 
     @async_test
     def test_HTTP_302_ALLOW_REDIRECT_POST(self):
-         r = yield from requests.post(httpbin('status', '302'), data={'some': 'data'})
+         r = yield From(requests.post(httpbin('status', '302'), data={'some': 'data'}))
          self.assertEqual(r.status_code, 200)
 
     @async_test
     def test_HTTP_200_OK_GET_WITH_PARAMS(self):
         heads = {'User-agent': 'Mozilla/5.0'}
 
-        r = yield from requests.get(httpbin('user-agent'), headers=heads)
+        r = yield From(requests.get(httpbin('user-agent'), headers=heads))
 
-        rText = yield from r.text
+        rText = yield From(r.text)
         assert heads['User-agent'] in rText
         assert r.status_code == 200
 
@@ -189,48 +190,48 @@ class RequestsTestCase(unittest.TestCase):
     def test_HTTP_200_OK_GET_WITH_MIXED_PARAMS(self):
         heads = {'User-agent': 'Mozilla/5.0'}
 
-        r = yield from requests.get(httpbin('get') + '?test=true', params={'q': 'test'}, headers=heads)
+        r = yield From(requests.get(httpbin('get') + '?test=true', params={'q': 'test'}, headers=heads))
         assert r.status_code == 200
 
     @async_test
     def test_set_cookie_on_301(self):
         s = requests.session()
         url = httpbin('cookies/set?foo=bar')
-        yield from s.get(url)
+        yield From(s.get(url))
         assert s.cookies['foo'] == 'bar'
 
     @async_test
     def test_cookie_sent_on_redirect(self):
         s = requests.session()
-        yield from s.get(httpbin('cookies/set?foo=bar'))
-        r = yield from s.get(httpbin('redirect/1'))  # redirects to httpbin('get')
-        rJson = yield from r.json()
+        yield From(s.get(httpbin('cookies/set?foo=bar')))
+        r = yield From(s.get(httpbin('redirect/1')))  # redirects to httpbin('get')
+        rJson = yield From(r.json())
         assert 'Cookie' in rJson['headers']
 
     @async_test
     def test_cookie_removed_on_expire(self):
         s = requests.session()
-        yield from s.get(httpbin('cookies/set?foo=bar'))
+        rsp = yield From(s.get(httpbin('cookies/set?foo=bar')))
         assert s.cookies['foo'] == 'bar'
-        yield from s.get(
+        yield From(s.get(
             httpbin('response-headers'),
             params={
                 'Set-Cookie':
                     'foo=deleted; expires=Thu, 01-Jan-1970 00:00:01 GMT'
             }
-        )
+        ))
         assert 'foo' not in s.cookies
 
     @async_test
     def test_cookie_quote_wrapped(self):
         s = requests.session()
-        yield from s.get(httpbin('cookies/set?foo="bar:baz"'))
+        rsp = yield From(s.get(httpbin('cookies/set?foo="bar:baz"')))
         assert s.cookies['foo'] == '"bar:baz"'
 
     @async_test
     def test_cookie_persists_via_api(self):
         s = requests.session()
-        r = yield from s.get(httpbin('redirect/1'), cookies={'foo': 'bar'})
+        r = yield From(s.get(httpbin('redirect/1'), cookies={'foo': 'bar'}))
         assert 'foo' in r.request.headers['Cookie']
         assert 'foo' in r.history[0].request.headers['Cookie']
 
@@ -238,8 +239,8 @@ class RequestsTestCase(unittest.TestCase):
     def test_request_cookie_overrides_session_cookie(self):
         s = requests.session()
         s.cookies['foo'] = 'bar'
-        r = yield from s.get(httpbin('cookies'), cookies={'foo': 'baz'})
-        rJson = yield from r.json()
+        r = yield From(s.get(httpbin('cookies'), cookies={'foo': 'baz'}))
+        rJson = yield From(r.json())
         assert rJson['cookies']['foo'] == 'baz'
         # Session cookie should not be modified
         assert s.cookies['foo'] == 'bar'
@@ -247,7 +248,7 @@ class RequestsTestCase(unittest.TestCase):
     @async_test
     def test_request_cookies_not_persisted(self):
         s = requests.session()
-        yield from s.get(httpbin('cookies'), cookies={'foo': 'baz'})
+        yield From(s.get(httpbin('cookies'), cookies={'foo': 'baz'}))
         # Sending a request with cookies should not add cookies to the session
         assert not s.cookies
 
@@ -257,9 +258,9 @@ class RequestsTestCase(unittest.TestCase):
         cookiejar_from_dict({'foo': 'bar'}, cj)
         s = requests.session()
         s.cookies = cj
-        r = yield from s.get(httpbin('cookies'))
+        r = yield From(s.get(httpbin('cookies')))
         # Make sure the cookie was sent
-        rJson = yield from r.json()
+        rJson = yield From(r.json())
         assert rJson['cookies']['foo'] == 'bar'
         # Make sure the session cj is still the custom one
         assert s.cookies is cj
@@ -269,14 +270,14 @@ class RequestsTestCase(unittest.TestCase):
         cj = cookielib.CookieJar()
         cookiejar_from_dict({'foo': 'bar'}, cj)
         s = requests.session()
-        r = yield from s.get(httpbin('cookies'), cookies=cj)
+        r = yield From(s.get(httpbin('cookies'), cookies=cj))
         # Make sure the cookie was sent
-        rJson = yield from r.json()
+        rJson = yield From(r.json())
         assert rJson['cookies']['foo'] == 'bar'
 
     @async_test
     def test_requests_in_history_are_not_overridden(self):
-        resp = yield from requests.get(httpbin('redirect/3'))
+        resp = yield From(requests.get(httpbin('redirect/3')))
         urls = [r.url for r in resp.history]
         req_urls = [r.request.url for r in resp.history]
         assert urls == req_urls
@@ -286,9 +287,9 @@ class RequestsTestCase(unittest.TestCase):
         """
         Show that even with redirects, Response.history is always a list.
         """
-        resp = yield from requests.get(httpbin('get'))
+        resp = yield From(requests.get(httpbin('get')))
         assert isinstance(resp.history, list)
-        resp = yield from requests.get(httpbin('redirect/1'))
+        resp = yield From(requests.get(httpbin('redirect/1')))
         assert isinstance(resp.history, list)
         assert not isinstance(resp.history, tuple)
 
@@ -308,26 +309,26 @@ class RequestsTestCase(unittest.TestCase):
             'User-agent': 'Mozilla/5.0 (github.com/kennethreitz/requests)'
         }
 
-        r = yield from requests.get(httpbin('user-agent'), headers=heads)
-        rText = yield from r.text
+        r = yield From(requests.get(httpbin('user-agent'), headers=heads))
+        rText = yield From(r.text)
         assert heads['User-agent'] in rText
 
         heads = {
             'user-agent': 'Mozilla/5.0 (github.com/kennethreitz/requests)'
         }
 
-        r = yield from requests.get(httpbin('user-agent'), headers=heads)
-        rText = yield from r.text
+        r = yield From(requests.get(httpbin('user-agent'), headers=heads))
+        rText = yield From(r.text)
         assert heads['user-agent'] in rText
 
     @async_test
     def test_HTTP_200_OK_HEAD(self):
-        r = yield from requests.head(httpbin('get'))
+        r = yield From(requests.head(httpbin('get')))
         assert r.status_code == 200
 
     @async_test
     def test_HTTP_200_OK_PUT(self):
-        r = yield from requests.put(httpbin('put'))
+        r = yield From(requests.put(httpbin('put')))
         assert r.status_code == 200
 
     @async_test
@@ -335,25 +336,30 @@ class RequestsTestCase(unittest.TestCase):
         auth = ('user', 'pass')
         url = httpbin('basic-auth', 'user', 'pass')
 
-        r = yield from requests.get(url, auth=auth)
+        r = yield From(requests.get(url, auth=auth))
         assert r.status_code == 200
 
-        r = yield from requests.get(url)
+        r = yield From(requests.get(url))
         assert r.status_code == 401
 
         s = requests.session()
         s.auth = auth
-        r = yield from s.get(url)
+        r = yield From(s.get(url))
         assert r.status_code == 200
 
     @async_test
     def test_connection_error(self):
         """Connecting to an unknown domain should raise a ConnectionError"""
-        with pytest.raises(ConnectionError):
-            yield from requests.get("http://fooobarbangbazbing.httpbin.org")
+        try:
+            with pytest.raises(ConnectionError):
+                rsp = yield From(requests.get("http://fooobarbangbazbing.nonorg"))
+                rsp.raise_for_status()
 
-        with pytest.raises(ConnectionError):
-            yield from requests.get("http://httpbin.org:1")
+            with pytest.raises(ConnectionError):
+                rsp = yield From(requests.get("http://httpbin.org:1"))
+                rsp.raise_for_status()
+        except Exception as ex:
+            raise
 
     @async_test
     def test_basicauth_with_netrc(self):
@@ -366,22 +372,22 @@ class RequestsTestCase(unittest.TestCase):
         requests.sessions.get_netrc_auth = get_netrc_auth_mock
 
         # Should use netrc and work.
-        r = yield from requests.get(url)
+        r = yield From(requests.get(url))
         assert r.status_code == 200
 
         # Given auth should override and fail.
-        r = yield from requests.get(url, auth=wrong_auth)
+        r = yield From(requests.get(url, auth=wrong_auth))
         assert r.status_code == 401
 
         s = requests.session()
 
         # Should use netrc and work.
-        r = yield from s.get(url)
+        r = yield From(s.get(url))
         assert r.status_code == 200
 
         # Given auth should override and fail.
         s.auth = wrong_auth
-        r = yield from s.get(url)
+        r = yield From(s.get(url))
         assert r.status_code == 401
 
     @async_test
@@ -390,25 +396,25 @@ class RequestsTestCase(unittest.TestCase):
         auth = HTTPDigestAuth('user', 'pass')
         url = httpbin('digest-auth', 'auth', 'user', 'pass')
 
-        r = yield from requests.get(url, auth=auth)
+        r = yield From(requests.get(url, auth=auth))
         assert r.status_code == 200
 
-        r = yield from requests.get(url)
+        r = yield From(requests.get(url))
         assert r.status_code == 401
 
         s = requests.session()
         s.auth = HTTPDigestAuth('user', 'pass')
-        r = yield from s.get(url)
+        r = yield From(s.get(url))
         assert r.status_code == 200
 
     @async_test
     def test_DIGEST_AUTH_RETURNS_COOKIE(self):
         url = httpbin('digest-auth', 'auth', 'user', 'pass')
         auth = HTTPDigestAuth('user', 'pass')
-        r = yield from requests.get(url)
+        r = yield From(requests.get(url))
         assert r.cookies['fake'] == 'fake_value'
 
-        r = yield from requests.get(url, auth=auth)
+        r = yield From(requests.get(url, auth=auth))
         assert r.status_code == 200
 
     @async_test
@@ -416,7 +422,7 @@ class RequestsTestCase(unittest.TestCase):
         url = httpbin('digest-auth', 'auth', 'user', 'pass')
         auth = HTTPDigestAuth('user', 'pass')
         s = requests.Session()
-        yield from s.get(url, auth=auth)
+        yield From(s.get(url, auth=auth))
         assert s.cookies['fake'] == 'fake_value'
 
     @async_test
@@ -425,11 +431,12 @@ class RequestsTestCase(unittest.TestCase):
         auth = HTTPDigestAuth('user', 'pass')
         url = httpbin('digest-auth', 'auth', 'user', 'pass')
 
-        r = yield from requests.get(url, auth=auth, stream=True)
-        assert (yield from r.raw.read()) != b''
+        r = yield From(requests.get(url, auth=auth, stream=True))
 
-        r = yield from requests.get(url, auth=auth, stream=False)
-        assert (yield from r.raw.read()) == b''
+        assert (yield From(r.raw.read())) != b''
+
+        r = yield From(requests.get(url, auth=auth, stream=False))
+        assert (yield From(r.raw.read())) == b''
 
     @async_test
     def test_DIGESTAUTH_WRONG_HTTP_401_GET(self):
@@ -437,15 +444,15 @@ class RequestsTestCase(unittest.TestCase):
         auth = HTTPDigestAuth('user', 'wrongpass')
         url = httpbin('digest-auth', 'auth', 'user', 'pass')
 
-        r = yield from requests.get(url, auth=auth)
+        r = yield From(requests.get(url, auth=auth))
         assert r.status_code == 401
 
-        r = yield from requests.get(url)
+        r = yield From(requests.get(url))
         assert r.status_code == 401
 
         s = requests.session()
         s.auth = auth
-        r = yield from s.get(url)
+        r = yield From(s.get(url))
         assert r.status_code == 401
 
     @async_test
@@ -454,61 +461,61 @@ class RequestsTestCase(unittest.TestCase):
         auth = HTTPDigestAuth('user', 'pass')
         url = httpbin('digest-auth', 'auth', 'user', 'pass')
 
-        r = yield from requests.get(url, auth=auth)
+        r = yield From(requests.get(url, auth=auth))
         assert '"auth"' in r.request.headers['Authorization']
 
     @async_test
     def test_POSTBIN_GET_POST_FILES(self):
 
         url = httpbin('post')
-        post1 = (yield from requests.post(url)).raise_for_status()
+        post1 = (yield From(requests.post(url))).raise_for_status()
 
-        post1 = yield from requests.post(url, data={'some': 'data'})
+        post1 = yield From(requests.post(url, data={'some': 'data'}))
         assert post1.status_code == 200
 
         with open('requirements.txt') as f:
-            post2 = yield from requests.post(url, files={'some': f})
+            post2 = yield From(requests.post(url, files={'some': f}))
         assert post2.status_code == 200
 
-        post4 = yield from requests.post(url, data='[{"some": "json"}]')
+        post4 = yield From(requests.post(url, data='[{"some": "json"}]'))
         assert post4.status_code == 200
 
         with pytest.raises(ValueError):
-            yield from requests.post(url, files=['bad file data'])
+            yield From(requests.post(url, files=['bad file data']))
 
     @async_test
     def test_POSTBIN_GET_POST_FILES_WITH_DATA(self):
 
         url = httpbin('post')
-        post1 = (yield from requests.post(url)).raise_for_status()
+        post1 = (yield From(requests.post(url))).raise_for_status()
 
-        post1 = yield from requests.post(url, data={'some': 'data'})
+        post1 = yield From(requests.post(url, data={'some': 'data'}))
         assert post1.status_code == 200
 
         with open('requirements.txt') as f:
-            post2 = yield from requests.post(url,
-                data={'some': 'data'}, files={'some': f})
+            post2 = yield From(requests.post(url,
+                data={'some': 'data'}, files={'some': f}))
         assert post2.status_code == 200
 
-        post4 = yield from requests.post(url, data='[{"some": "json"}]')
+        post4 = yield From(requests.post(url, data='[{"some": "json"}]'))
         assert post4.status_code == 200
 
         with pytest.raises(ValueError):
-            yield from requests.post(url, files=['bad file data'])
+            yield From(requests.post(url, files=['bad file data']))
 
     @async_test
     def test_conflicting_post_params(self):
         url = httpbin('post')
         with open('requirements.txt') as f:
             try:
-                yield from requests.post(url, data='[{\"some\": \"data\"}]', files={'some': f})
+                yield From(requests.post(url, data='[{\"some\": \"data\"}]', files={'some': f}))
             except ValueError:
                 pass
             else:
                 self.fail('did not raise %s' % ValueError)
         with open('requirements.txt') as f:
             try:
-                yield from requests.post(url, data=u('[{\"some\": \"data\"}]'), files={'some': f})
+                yield From(requests.post(url, data=u('[{\"some\": \"data\"}]'), files={'some': f}))
             except ValueError:
                 pass
             else:
@@ -516,79 +523,79 @@ class RequestsTestCase(unittest.TestCase):
 
     @async_test
     def test_request_ok_set(self):
-        r = yield from requests.get(httpbin('status', '404'))
+        r = yield From(requests.get(httpbin('status', '404')))
         assert not r.ok
 
     @async_test
     def test_status_raising(self):
-        r = yield from requests.get(httpbin('status', '404'))
+        r = yield From(requests.get(httpbin('status', '404')))
         with pytest.raises(requests.exceptions.HTTPError):
             r.raise_for_status()
 
-        r = yield from requests.get(httpbin('status', '500'))
+        r = yield From(requests.get(httpbin('status', '500')))
         assert not r.ok
 
     @async_test
     def test_decompress_gzip(self):
-        r = yield from requests.get(httpbin('gzip'))
-        rc = yield from r.content
+        r = yield From(requests.get(httpbin('gzip')))
+        rc = yield From(r.content)
         rc.decode('ascii')
 
     @async_test
     def test_unicode_get(self):
         url = httpbin('/get')
-        yield from requests.get(url, params={'foo': 'føø'})
-        yield from requests.get(url, params={'føø': 'føø'})
-        yield from requests.get(url, params={'føø': 'føø'})
-        yield from requests.get(url, params={'foo': 'foo'})
-        yield from requests.get(httpbin('ø'), params={'foo': 'foo'})
+        yield From(requests.get(url, params={'foo': 'føø'}))
+        yield From(requests.get(url, params={'føø': 'føø'}))
+        yield From(requests.get(url, params={'føø': 'føø'}))
+        yield From(requests.get(url, params={'foo': 'foo'}))
+        yield From(requests.get(httpbin('ø'), params={'foo': 'foo'}))
 
     @async_test
     def test_unicode_header_name(self):
-        yield from requests.put(
+        yield From(requests.put(
             httpbin('put'),
             headers={str('Content-Type'): 'application/octet-stream'},
-            data='\xff')  # compat.str is unicode.
+            data='\xff'))  # compat.str is unicode.
 
     @async_test
     def test_pyopenssl_redirect(self):
-        yield from requests.get('https://httpbin.org/status/301')
+        yield From(requests.get('https://httpbin.org/status/301'))
 
     @async_test
     def test_urlencoded_get_query_multivalued_param(self):
 
-        r = yield from requests.get(httpbin('get'), params=dict(test=['foo', 'baz']))
+        r = yield From(requests.get(httpbin('get'), params=dict(test=['foo', 'baz'])))
         assert r.status_code == 200
         assert r.url == httpbin('get?test=foo&test=baz')
 
     @async_test
     def test_different_encodings_dont_break_post(self):
-        r = yield from requests.post(httpbin('post'),
+        r = yield From(requests.post(httpbin('post'),
             data={'stuff': json.dumps({'a': 123})},
             params={'blah': 'asdf1234'},
-            files={'file': ('test_requests.py', open(__file__, 'rb'))})
+            files={'file': ('test_requests.py', open(__file__, 'rb'))}))
         assert r.status_code == 200
 
     @async_test
     def test_unicode_multipart_post(self):
-        r = yield from requests.post(httpbin('post'),
+        r = yield From(requests.post(httpbin('post'),
             data={'stuff': u('ëlïxr')},
-            files={'file': ('test_requests.py', open(__file__, 'rb'))})
+            files={'file': ('test_requests.py', open(__file__, 'rb'))}))
         assert r.status_code == 200
 
-        r = yield from requests.post(httpbin('post'),
+        r = yield From(requests.post(httpbin('post'),
             data={'stuff': u('ëlïxr').encode('utf-8')},
-            files={'file': ('test_requests.py', open(__file__, 'rb'))})
+            files={'file': ('test_requests.py', open(__file__, 'rb'))}))
         assert r.status_code == 200
 
-        r = yield from requests.post(httpbin('post'),
+        r = yield From(requests.post(httpbin('post'),
             data={'stuff': 'elixr'},
-            files={'file': ('test_requests.py', open(__file__, 'rb'))})
+            files={'file': ('test_requests.py', open(__file__, 'rb'))}))
         assert r.status_code == 200
 
-        r = yield from requests.post(httpbin('post'),
+        r = yield From(requests.post(httpbin('post'),
             data={'stuff': 'elixr'.encode('utf-8')},
-            files={'file': ('test_requests.py', open(__file__, 'rb'))})
+            files={'file': ('test_requests.py', open(__file__, 'rb'))}))
         assert r.status_code == 200
 
     def test_unicode_multipart_post_fieldnames(self):
@@ -605,18 +612,18 @@ class RequestsTestCase(unittest.TestCase):
     @async_test
     def test_unicode_method_name(self):
         files = {'file': open('test_requests.py', 'rb')}
-        r = yield from requests.request(
-            method=u('POST'), url=httpbin('post'), files=files)
+        r = yield From(requests.request(
+            method=u('POST'), url=httpbin('post'), files=files))
         assert r.status_code == 200
 
     @async_test
     def test_custom_content_type(self):
-        r = yield from requests.post(
+        r = yield From(requests.post(
             httpbin('post'),
             data={'stuff': json.dumps({'a': 123})},
             files={'file1': ('test_requests.py', open(__file__, 'rb')),
                    'file2': ('test_requests', open(__file__, 'rb'),
-                             'text/py-content-type')})
+                             'text/py-content-type')}))
         assert r.status_code == 200
         assert b"text/py-content-type" in r.request.body
 
@@ -651,14 +658,14 @@ class RequestsTestCase(unittest.TestCase):
         def hook(resp, **kwargs):
             yield None # make hook a generator
             resp.hook_working = True
-            return resp
+            raise Return(resp)
 
         req = requests.Request('GET', HTTPBIN, hooks={'response': hook})
         prep = req.prepare()
 
         s = requests.Session()
         s.proxies = getproxies()
-        resp = yield from s.send(prep)
+        resp = yield From(s.send(prep))
 
         assert hasattr(resp, 'hook_working')
 
@@ -676,9 +683,9 @@ class RequestsTestCase(unittest.TestCase):
         s.auth = DummyAuth()
 
         prep = s.prepare_request(req)
-        resp = yield from s.send(prep)
+        resp = yield From(s.send(prep))
 
-        rJson = yield from resp.json()
+        rJson = yield From(resp.json())
         assert rJson['headers'][
             'Dummy-Auth-Test'] == 'dummy-auth-test-ok'
 
@@ -827,7 +834,7 @@ class RequestsTestCase(unittest.TestCase):
 
     @async_test
     def test_time_elapsed_blank(self):
-        r = yield from requests.get(httpbin('get'))
+        r = yield From(requests.get(httpbin('get')))
         td = r.elapsed
         total_seconds = ((td.microseconds + (td.seconds + td.days * 24 * 3600)
                          * 10**6) / 10**6)
@@ -857,7 +864,7 @@ class RequestsTestCase(unittest.TestCase):
         r._content = b'the content'
         r.encoding = 'ascii'
 
-        chunks = yield from r.iter_content(decode_unicode=True)
+        chunks = yield From(r.iter_content(decode_unicode=True))
         assert all(isinstance(chunk, str) for chunk in chunks)
 
         class FakeIO():
@@ -865,19 +872,19 @@ class RequestsTestCase(unittest.TestCase):
                 self.d = d
             def stream(self, size, decode_content=None):
                 yield None
-                return iter_slices(self.d, size)
+                raise Return(iter_slices(self.d, size))
 
 
         # also for streaming
         r = requests.Response()
         r.raw = FakeIO(b'the content')
         r.encoding = 'ascii'
-        chunks = yield from r.iter_content(decode_unicode=True)
+        chunks = yield From(r.iter_content(decode_unicode=True))
         assert all(isinstance(chunk, str) for chunk in chunks)
 
     @async_test
     def test_request_and_response_are_pickleable(self):
-        r = yield from requests.get(httpbin('get'))
+        r = yield From(requests.get(httpbin('get')))
 
         # verify we can pickle the original request
         assert pickle.loads(pickle.dumps(r.request))
@@ -890,7 +897,7 @@ class RequestsTestCase(unittest.TestCase):
 
         # verify we can pickle the response and that we have access to
         # the original request.
-        yield from r.content
+        yield From(r.content)
         pr = pickle.loads(pickle.dumps(r))
         assert r.request.url == pr.request.url
         assert r.request.headers == pr.request.headers
@@ -924,7 +931,7 @@ class RequestsTestCase(unittest.TestCase):
     def test_cannot_send_unprepared_requests(self):
         r = requests.Request(url=HTTPBIN)
         with pytest.raises(ValueError):
-            yield from requests.Session().send(r)
+            yield From(requests.Session().send(r))
 
     @async_test
     def test_http_error(self):
@@ -945,7 +952,7 @@ class RequestsTestCase(unittest.TestCase):
         s = pickle.loads(pickle.dumps(s))
         s.proxies = getproxies()
 
-        r = yield from s.send(r.prepare())
+        r = yield From(s.send(r.prepare()))
         assert r.status_code == 200
 
     @async_test
@@ -956,7 +963,7 @@ class RequestsTestCase(unittest.TestCase):
         s = requests.Session()
         s.headers.update({'ACCEPT': 'BOGUS'})
         s.headers.update({'accept': 'application/json'})
-        r = yield from s.get(httpbin('get'))
+        r = yield From(s.get(httpbin('get')))
         headers = r.request.headers
         assert headers['accept'] == 'application/json'
         assert headers['Accept'] == 'application/json'
@@ -966,7 +973,7 @@ class RequestsTestCase(unittest.TestCase):
     def test_uppercase_scheme_redirect(self):
         parts = urlparse(httpbin('html'))
         url = "HTTP://" + parts.netloc + parts.path
-        r = yield from requests.get(httpbin('redirect-to'), params={'url': url})
+        r = yield From(requests.get(httpbin('redirect-to'), params={'url': url}))
         assert r.status_code == 200
         assert r.url.lower() == url.lower()
 
@@ -1014,15 +1021,15 @@ class RequestsTestCase(unittest.TestCase):
         # From issue #1321
         s = requests.Session()
         s.headers['foo'] = 'bar'
-        r = yield from s.get(httpbin('get'), headers={'FOO': None})
+        r = yield From(s.get(httpbin('get'), headers={'FOO': None}))
         assert 'foo' not in r.request.headers
 
     @async_test
     def test_params_are_merged_case_sensitive(self):
         s = requests.Session()
         s.params['foo'] = 'bar'
-        r = yield from s.get(httpbin('get'), params={'FOO': 'bar'})
-        rJson = yield from r.json()
+        r = yield From(s.get(httpbin('get'), params={'FOO': 'bar'}))
+        rJson = yield From(r.json())
         assert rJson['args'] == {'foo': 'bar', 'FOO': 'bar'}
 
     @async_test
@@ -1078,17 +1085,17 @@ class RequestsTestCase(unittest.TestCase):
 
     @async_test
     def test_auth_is_stripped_on_redirect_off_host(self):
-        r = yield from requests.get(
+        r = yield From(requests.get(
             httpbin('redirect-to'),
             params={'url': 'http://www.google.co.uk'},
             auth=('user', 'pass'),
-        )
+        ))
         assert r.history[0].request.headers['Authorization']
         assert not r.request.headers.get('Authorization', '')
 
     @async_test
     def test_auth_is_retained_for_redirect_on_host(self):
-        r = yield from requests.get(httpbin('redirect/1'), auth=('user', 'pass'))
+        r = yield From(requests.get(httpbin('redirect/1'), auth=('user', 'pass')))
         h1 = r.history[0].request.headers['Authorization']
         h2 = r.request.headers['Authorization']
 
@@ -1097,9 +1104,9 @@ class RequestsTestCase(unittest.TestCase):
     @async_test
     def tst_manual_redirect_with_partial_body_read(self):
         s = requests.Session()
-        r1 = yield from s.get(httpbin('redirect/2'), allow_redirects=False, stream=True)
+        r1 = yield From(s.get(httpbin('redirect/2'), allow_redirects=False, stream=True))
         assert r1.is_redirect
-        rg = yield from s.resolve_redirects(r1, r1.request, stream=True)
+        rg = yield From(s.resolve_redirects(r1, r1.request, stream=True))
 
         # read only the first eight bytes of the response body,
         # then follow the redirect
@@ -1134,7 +1141,7 @@ class RequestsTestCase(unittest.TestCase):
         url = httpbin('redirect/1')
         self._patch_adapter_gzipped_redirect(s, url)
         try:
-            yield from s.get(url)
+            yield From(s.get(url))
         except DecodeError:
             pass
         else:
@@ -1147,7 +1154,7 @@ class RequestsTestCase(unittest.TestCase):
 
     @async_test
     def test_requests_history_is_saved(self):
-        r = yield from requests.get('https://httpbin.org/redirect/5')
+        r = yield From(requests.get('https://httpbin.org/redirect/5'))
         total = r.history[-1].history
         i = 0
         for item in r.history:
@@ -1156,13 +1163,13 @@ class RequestsTestCase(unittest.TestCase):
 
     @async_test
     def test_json_param_post_content_type_works(self):
-        r = yield from requests.post(
+        r = yield From(requests.post(
             httpbin('post'),
             json={'life': 42}
-        )
+        ))
         assert r.status_code == 200
         assert 'application/json' in r.request.headers['Content-Type']
-        rJson = yield from r.json()
+        rJson = yield From(r.json())
         assert {'life': 42} == rJson['json']
 
 
@@ -1493,18 +1500,18 @@ class TestTimeout:
     @async_test
     def test_stream_timeout(self):
         try:
-            yield from requests.get('https://httpbin.org/delay/10', timeout=2.0)
+            yield From(requests.get('https://httpbin.org/delay/10', timeout=2.0))
         except requests.exceptions.Timeout as e:
             assert 'Read timed out' in e.args[0].args[0]
 
     @async_test
     def test_invalid_timeout(self):
         with pytest.raises(ValueError) as e:
-            yield from requests.get(httpbin('get'), timeout=(3, 4, 5))
+            yield From(requests.get(httpbin('get'), timeout=(3, 4, 5)))
         assert '(connect, read)' in str(e)
 
         with pytest.raises(ValueError) as e:
-            yield from requests.get(httpbin('get'), timeout="foo")
+            yield From(requests.get(httpbin('get'), timeout="foo"))
         assert 'must be an int or float' in str(e)
 
     @async_test
@@ -1517,13 +1524,13 @@ class TestTimeout:
         Instead we verify that setting the timeout to None does not prevent the
         request from succeeding.
         """
-        r = yield from requests.get(httpbin('get'), timeout=None)
+        r = yield From(requests.get(httpbin('get'), timeout=None))
         assert r.status_code == 200
 
     @async_test
     def test_read_timeout(self):
         try:
-            yield from requests.get(httpbin('delay/10'), timeout=(None, 0.1))
+            yield From(requests.get(httpbin('delay/10'), timeout=(None, 0.1)))
             assert False, "The recv() request should time out."
         except ReadTimeout:
             pass
@@ -1531,7 +1538,7 @@ class TestTimeout:
     @async_test
     def test_connect_timeout(self):
         try:
-            yield from requests.get(TARPIT, timeout=(0.1, None))
+            yield From(requests.get(TARPIT, timeout=(0.1, None)))
             assert False, "The connect() request should time out."
         except ConnectTimeout as e:
             assert isinstance(e, ConnectionError)
@@ -1540,7 +1547,7 @@ class TestTimeout:
     @async_test
     def test_total_timeout_connect(self):
         try:
-            yield from requests.get(TARPIT, timeout=(0.1, 0.1))
+            yield From(requests.get(TARPIT, timeout=(0.1, 0.1)))
             assert False, "The connect() request should time out."
         except ConnectTimeout:
             pass
@@ -1595,10 +1602,10 @@ class TestRedirects:
     def test_requests_are_updated_each_time(self):
         session = RedirectSession([303, 307])
         prep = requests.Request('POST', 'http://httpbin.org/post').prepare()
-        r0 = yield from session.send(prep)
+        r0 = yield From(session.send(prep))
         assert r0.request.method == 'POST'
         assert session.calls[-1] == SendCall((r0.request,), {})
-        redirect_generator = yield from session.resolve_redirects(r0, prep)
+        redirect_generator = yield From(session.resolve_redirects(r0, prep))
         for response in redirect_generator:
             assert response.request.method == 'GET'
             send_call = SendCall((response.request,),

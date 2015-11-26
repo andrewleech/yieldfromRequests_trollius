@@ -11,26 +11,27 @@ and maintain connections.
 import socket
 
 from .models import Response
-from yieldfrom.urllib3 import Retry
-from yieldfrom.urllib3.poolmanager import PoolManager, proxy_from_url
-from yieldfrom.urllib3.response import HTTPResponse
-from yieldfrom.urllib3.util import Timeout as TimeoutSauce
+from yieldfrom_t.urllib3 import Retry
+from yieldfrom_t.urllib3.poolmanager import PoolManager, proxy_from_url
+from yieldfrom_t.urllib3.response import HTTPResponse
+from yieldfrom_t.urllib3.util import Timeout as TimeoutSauce
 from .compat import urlparse, basestring
 from .utils import (DEFAULT_CA_BUNDLE_PATH, get_encoding_from_headers,
                     prepend_scheme_if_needed, get_auth_from_url, urldefragauth)
 from .structures import CaseInsensitiveDict
-from yieldfrom.urllib3.exceptions import ConnectTimeoutError
-from yieldfrom.urllib3.exceptions import HTTPError as _HTTPError
-from yieldfrom.urllib3.exceptions import MaxRetryError
-from yieldfrom.urllib3.exceptions import ProxyError as _ProxyError
-from yieldfrom.urllib3.exceptions import ProtocolError
-from yieldfrom.urllib3.exceptions import ReadTimeoutError
-from yieldfrom.urllib3.exceptions import SSLError as _SSLError
+from yieldfrom_t.urllib3.exceptions import ConnectTimeoutError
+from yieldfrom_t.urllib3.exceptions import HTTPError as _HTTPError
+from yieldfrom_t.urllib3.exceptions import MaxRetryError
+from yieldfrom_t.urllib3.exceptions import ProxyError as _ProxyError
+from yieldfrom_t.urllib3.exceptions import ProtocolError
+from yieldfrom_t.urllib3.exceptions import ReadTimeoutError
+from yieldfrom_t.urllib3.exceptions import SSLError as _SSLError
 from .cookies import extract_cookies_to_jar
 from .exceptions import (ConnectionError, ConnectTimeout, ReadTimeout, SSLError,
                          ProxyError)
 from .auth import _basic_auth_str
-import asyncio
+import trollius as asyncio
+from trollius import From, Return
 
 DEFAULT_POOLBLOCK = False
 DEFAULT_POOLSIZE = 10
@@ -351,7 +352,7 @@ class HTTPAdapter(BaseAdapter):
 
         try:
             if not chunked:
-                resp = yield from conn.urlopen(
+                resp = yield From(conn.urlopen(
                     method=request.method,
                     url=url,
                     body=request.body,
@@ -362,7 +363,7 @@ class HTTPAdapter(BaseAdapter):
                     decode_content=False,
                     retries=Retry(self.max_retries, read=False),
                     timeout=timeout
-                )
+                ))
 
             # Send the request.
             else:
@@ -389,13 +390,13 @@ class HTTPAdapter(BaseAdapter):
                     low_conn.send(b'0\r\n\r\n')
 
                     r = low_conn.getresponse()
-                    resp = yield from HTTPResponse.from_httplib(
+                    resp = yield From(HTTPResponse.from_httplib(
                         r,
                         pool=conn,
                         connection=low_conn,
                         preload_content=False,
                         decode_content=False
-                    )
+                    ))
                 except:
                     # If we hit any problems here, clean up the connection.
                     # Then, reraise so that we can handle the actual exception.
@@ -425,4 +426,4 @@ class HTTPAdapter(BaseAdapter):
             else:
                 raise
 
-        return self.build_response(request, resp)
+        raise Return(self.build_response(request, resp))

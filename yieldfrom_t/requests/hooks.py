@@ -12,7 +12,8 @@ Available hooks:
     The response generated from a Request.
 
 """
-import asyncio
+import trollius as asyncio
+from trollius import From, Return
 
 HOOKS = ['response']
 
@@ -38,8 +39,8 @@ def dispatch_hook(key, hooks, hook_data, **kwargs):
             hooks = [hooks]
 
         for hook in hooks:
-            _hook_data = yield from hook(hook_data, **kwargs)
+            _hook_data = yield From(hook(hook_data, **kwargs))
             if _hook_data is not None:
                 hook_data = _hook_data
 
-    return hook_data
+    raise Return(hook_data)

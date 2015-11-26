@@ -17,11 +17,11 @@ if sys.argv[-1] == 'publish':
     sys.exit()
 
 packages = [
-    'yieldfrom',
-    'yieldfrom.requests',
+    'yieldfrom_t',
+    'yieldfrom_t.requests',
 ]
 
-requires = ['chardet>=2.2.1', 'yieldfrom.http.client', 'yieldfrom.urllib3', 'setuptools']
+requires = ['chardet>=2.2.1', 'certifi', 'yieldfrom_t.http.client', 'yieldfrom_t.urllib3', 'setuptools', 'trollius']
 
 with open('README.rst', 'r', 'utf-8') as f:
     readme = f.read()
@@ -29,9 +29,9 @@ with open('HISTORY.rst', 'r', 'utf-8') as f:
     history = f.read()
 
 setup(
-    name='yieldfrom.requests',
+    name='yieldfrom_t.requests',
     version=requests.__version__,
-    description='asyncio Python HTTP for Humans.',
+    description='asyncio (trollius) Python HTTP for Humans.',
     long_description=readme + '\n\n' + history,
 
     author='Kenneth Reitz',
@@ -39,13 +39,13 @@ setup(
     maintainer='David Keeney',
     maintainer_email='dkeeney@rdbhost.com',
 
-    url='http://github.com/rdbhost/yieldfromrequests',
+    url='http://github.com/rdbhost/yieldfromrequests_trollius',
 
     packages=packages,
-    package_data={'': ['LICENSE', 'NOTICE'], 'yieldfrom.requests': ['*.pem']},
-    package_dir={'yieldfrom': 'yieldfrom'},
+    package_data={'': ['LICENSE', 'NOTICE'], 'yieldfrom_t.requests': ['*.pem']},
+    package_dir={'yieldfrom_t': 'yieldfrom_t'},
     include_package_data=True,
-    namespace_packages=['yieldfrom'],
+    namespace_packages=['yieldfrom_t'],
     install_requires=requires,
 
     license='Apache 2.0',

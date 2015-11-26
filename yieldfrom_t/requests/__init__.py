@@ -13,17 +13,17 @@ Requests is an HTTP library, written in Python, for human beings. Basic GET
 usage:
 
    >>> import requests
-   >>> r = yield from requests.get('https://www.python.org')
+   >>> r = yield From(requests.get('https://www.python.org'))
    >>> r.status_code
    200
-   >>> 'Python is a programming language' in (yield from r.content)
+   >>> 'Python is a programming language' in (yield From(r.content))
    True
 
 ... or POST:
 
    >>> payload = dict(key1='value1', key2='value2')
-   >>> r = yield from requests.post('http://httpbin.org/post', data=payload)
-   >>> print((yield from r.text))
+   >>> r = yield From(requests.post('http://httpbin.org/post', data=payload))
+   >>> print((yield From(r.text)))
    {
      ...
      "form": {
@@ -41,7 +41,7 @@ is at <http://python-requests.org>.
 
 """
 
-__title__ = 'yieldfrom.requests'
+__title__ = 'yieldfrom_t.requests'
 __version__ = '0.1.1'
 __build__ = 0x000101
 __author__ = 'Kenneth Reitz'
@@ -50,7 +50,7 @@ __copyright__ = 'Copyright 2014 Kenneth Reitz'
 
 # Attempt to enable urllib3's SNI support, if possible
 try:
-    from yieldfrom.urllib3.contrib import pyopenssl
+    from yieldfrom_t.urllib3.contrib import pyopenssl
     pyopenssl.inject_into_urllib3()
 except ImportError:
     pass

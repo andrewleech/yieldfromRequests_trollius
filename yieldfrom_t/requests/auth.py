@@ -17,7 +17,8 @@ from base64 import b64encode
 from .compat import urlparse, str
 from .cookies import extract_cookies_to_jar
 from .utils import parse_dict_header, to_native_string
-import asyncio
+import trollius as asyncio
+from trollius import From, Return
 
 CONTENT_TYPE_FORM_URLENCODED = 'application/x-www-form-urlencoded'
 CONTENT_TYPE_MULTI_PART = 'multipart/form-data'
@@ -170,7 +171,7 @@ class HTTPDigestAuth(AuthBase):
 
             # Consume content and release the original connection
             # to allow our new request to reuse the same one.
-            yield from r.content
+            yield From(r.content)
             r.raw.release_conn() # redundant
             prep = r.request.copy()
             extract_cookies_to_jar(prep._cookies, r.request, r.raw)
@@ -178,14 +179,14 @@ class HTTPDigestAuth(AuthBase):
 
             prep.headers['Authorization'] = self.build_digest_header(
                 prep.method, prep.url)
-            _r = yield from r.connection.send(prep, **kwargs)
+            _r = yield From(r.connection.send(prep, **kwargs))
             _r.history.append(r)
             _r.request = prep
 
-            return _r
+            raise Return(_r)
 
         setattr(self, 'num_401_calls', 1)
-        return r
+        raise Return(r)
 
     def __call__(self, r):
         # If we have a saved nonce, skip the 401

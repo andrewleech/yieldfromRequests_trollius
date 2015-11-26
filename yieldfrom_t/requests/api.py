@@ -12,7 +12,7 @@ This module implements the Requests API.
 """
 
 from . import sessions
-
+from trollius import Return, From
 
 def request(method, url, **kwargs):
     """Constructs and sends a :class:`Request <Request>`.
@@ -46,8 +46,8 @@ def request(method, url, **kwargs):
     """
 
     session = sessions.Session()
-    r = yield from session.request(method=method, url=url, **kwargs)
-    return r
+    r = yield From(session.request(method=method, url=url, **kwargs))
+    raise Return(r)
 
 
 def get(url, **kwargs):
@@ -58,8 +58,7 @@ def get(url, **kwargs):
     """
 
     kwargs.setdefault('allow_redirects', True)
-    r = yield from request('get', url, **kwargs)
-    return r
+    return request('get', url, **kwargs)
 
 
 def options(url, **kwargs):

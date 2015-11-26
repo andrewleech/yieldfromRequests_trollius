@@ -28,7 +28,8 @@ from .compat import (quote, urlparse, bytes, str, OrderedDict, unquote,
 from .cookies import RequestsCookieJar, cookiejar_from_dict
 from .structures import CaseInsensitiveDict
 from .exceptions import InvalidURL
-import asyncio
+import trollius as asyncio
+from trollius import From, Return
 
 _hush_pyflakes = (RequestsCookieJar,)
 
@@ -363,17 +364,17 @@ def get_unicode_from_response(r):
 
     if encoding:
         try:
-            rc = yield from r.content
-            return str(rc, encoding)
+            rc = yield From(r.content)
+            raise Return(str(rc, encoding))
         except UnicodeError:
             tried_encodings.append(encoding)
 
     # Fall back:
-    rc = yield from r.content
+    rc = yield From(r.content)
     try:
-        return str(rc, encoding, errors='replace')
+        raise Return(str(rc, encoding, errors='replace'))
     except TypeError:
-        return rc
+        raise Return(rc)
 
 
 # The unreserved URI characters (RFC 3986)

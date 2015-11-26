@@ -31,7 +31,8 @@ from .utils import (
 )
 
 from .status_codes import codes
-import asyncio
+import trollius as asyncio
+from trollius import From, Return
 
 # formerly defined here, reexposed here for backward compatibility
 from .models import REDIRECT_STATI
@@ -108,9 +109,9 @@ class SessionRedirectMixin(object):
                 resp.history = new_hist
 
             try:
-                yield from resp.content  # Consume socket so it can be released
+                yield From(resp.content)  # Consume socket so it can be released
             except (ChunkedEncodingError, ContentDecodingError, RuntimeError):
-                yield from resp.raw.read(decode_content=False)
+                yield From(resp.raw.read(decode_content=False))
 
             if i >= self.max_redirects:
                 raise TooManyRedirects('Exceeded %s redirects.' % self.max_redirects)
@@ -184,7 +185,7 @@ class SessionRedirectMixin(object):
             # Override the original request.
             req = prepared_request
 
-            resp = yield from self.send(
+            resp = yield From(self.send(
                 req,
                 stream=stream,
                 timeout=timeout,
@@ -192,14 +193,14 @@ class SessionRedirectMixin(object):
                 cert=cert,
                 proxies=proxies,
                 allow_redirects=False,
-            )
+            ))
 
             extract_cookies_to_jar(self.cookies, prepared_request, resp.raw)
 
             i += 1
             redir_responses.append(resp)
 
-        return iter(redir_responses)
+        raise Return(iter(redir_responses))
 
     def rebuild_auth(self, prepared_request, response):
         """
@@ -462,9 +463,9 @@ class Session(SessionRedirectMixin):
             'allow_redirects': allow_redirects,
         }
         send_kwargs.update(settings)
-        resp = yield from self.send(prep, **send_kwargs)
+        resp = yield From(self.send(prep, **send_kwargs))
 
-        return resp
+        raise Return(resp)
 
     def get(self, url, **kwargs):
         """Sends a GET request. Returns :class:`Response` object.
@@ -474,8 +475,7 @@ class Session(SessionRedirectMixin):
         """
 
         kwargs.setdefault('allow_redirects', True)
-        d = yield from self.request('GET', url, **kwargs)
-        return d
+        return self.request('GET', url, **kwargs)
 
     def options(self, url, **kwargs):
         """Sends a OPTIONS request. Returns :class:`Response` object.
@@ -576,13 +576,13 @@ class Session(SessionRedirectMixin):
         start = datetime.utcnow()
 
         # Send the request
-        r = yield from adapter.send(request, **kwargs)
+        r = yield From(adapter.send(request, **kwargs))
 
         # Total elapsed time of the request (approximately)
         r.elapsed = datetime.utcnow() - start
 
         # Response manipulation hooks
-        r = yield from dispatch_hook('response', hooks, r, **kwargs)
+        r = yield From(dispatch_hook('response', hooks, r, **kwargs))
 
         # Persist cookies
         if r.history:
@@ -594,12 +594,12 @@ class Session(SessionRedirectMixin):
         extract_cookies_to_jar(self.cookies, request, r.raw)
 
         # Redirect resolving generator.
-        gen = yield from self.resolve_redirects(r, request,
+        gen = yield From(self.resolve_redirects(r, request,
             stream=stream,
             timeout=timeout,
             verify=verify,
             cert=cert,
-            proxies=proxies)
+            proxies=proxies))
 
         # Resolve redirects if allowed.
         history = [resp for resp in gen] if allow_redirects else []
@@ -613,9 +613,9 @@ class Session(SessionRedirectMixin):
             r.history = history
 
         if not stream:
-            yield from r.content
+            yield From(r.content)
 
-        return r
+        raise Return(r)
 
     def merge_environment_settings(self, url, proxies, stream, verify, cert):
         """Check the environment and merge it with some settings."""
@@ -638,8 +638,8 @@ class Session(SessionRedirectMixin):
         verify = merge_setting(verify, self.verify)
         cert = merge_setting(cert, self.cert)
 
-        return {'verify': verify, 'proxies': proxies, 'stream': stream,
-                'cert': cert}
+        return ({'verify': verify, 'proxies': proxies, 'stream': stream,
+                'cert': cert})
 
     def get_adapter(self, url):
         """Returns the appropriate connnection adapter for the given URL."""
